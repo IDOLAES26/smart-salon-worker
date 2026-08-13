@@ -1,0 +1,13 @@
+{
+  "name": "smart-salon-worker",
+  "version": "1.0.0",
+  "description": "Browser automation worker for SmartSalon availability",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "playwright": "^1.54.2"
+  }
+}
