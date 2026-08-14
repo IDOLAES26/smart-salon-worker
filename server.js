@@ -82,7 +82,6 @@ app.get("/availability-test", async (req, res) => {
   }
 });
 
-
 app.listen(PORT, () => {
   console.log(`SmartSalon worker running on port ${PORT}`);
 });
