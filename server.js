@@ -51,6 +51,37 @@ app.get("/browser-test", async (req, res) => {
     }
   }
 });
+app.get("/availability-test", async (req, res) => {
+  let browser;
+
+  try {
+    browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+
+    await page.goto("https://www.sisleynailsalon1.com/booking/", {
+      waitUntil: "domcontentloaded",
+      timeout: 30000
+    });
+
+    await page.waitForTimeout(3000);
+
+    const bodyText = await page.locator("body").innerText();
+
+    res.json({
+      status: "success",
+      pageText: bodyText
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      status: "error",
+      message: error.message
+    });
+  } finally {
+    if (browser) await browser.close();
+  }
+});
+
 
 app.listen(PORT, () => {
   console.log(`SmartSalon worker running on port ${PORT}`);
