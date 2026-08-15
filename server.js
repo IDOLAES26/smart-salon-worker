@@ -58,9 +58,9 @@ app.get("/browser-test", async (req, res) => {
 });
 
 // --------------------------------------------------
-// Inspect Sisley booking page and all frames
+// Inspect booking page DOM, HTML and scripts
 // --------------------------------------------------
-app.get("/availability-test", async (req, res) => {
+app.get("/page-debug", async (req, res) => {
   let browser;
 
   try {
@@ -71,49 +71,71 @@ app.get("/availability-test", async (req, res) => {
     const page = await browser.newPage();
 
     await page.goto(BOOKING_URL, {
-      waitUntil: "domcontentloaded",
-      timeout: 30000
+      waitUntil: "networkidle",
+      timeout: 60000
     });
 
-    // Give embedded booking widgets time to load
     await page.waitForTimeout(5000);
 
     const title = await page.title();
+    const html = await page.content();
 
-    // Get information about every frame/iframe
-    const frames = page.frames().map((frame) => ({
-      name: frame.name(),
-      url: frame.url()
-    }));
+    const bodyText = await page.locator("body").innerText().catch(() => "");
 
-    // Get visible text from every frame
-    const frameTexts = [];
+    const scripts = await page.locator("script").evaluateAll((nodes) =>
+      nodes.map((node) => ({
+        src: node.src || "",
+        type: node.type || "",
+        textPreview: node.src ? "" : (node.textContent || "").slice(0, 500)
+      }))
+    );
 
-    for (const frame of page.frames()) {
-      let text = "";
+    const links = await page.locator("link").evaluateAll((nodes) =>
+      nodes.map((node) => ({
+        rel: node.rel || "",
+        href: node.href || ""
+      }))
+    );
 
-      try {
-        text = await frame.locator("body").innerText({
-          timeout: 5000
-        });
-      } catch (error) {
-        text = "";
-      }
+    const iframes = await page.locator("iframe").evaluateAll((nodes) =>
+      nodes.map((node) => ({
+        src: node.src || "",
+        title: node.title || "",
+        name: node.name || ""
+      }))
+    );
 
-      frameTexts.push({
-        name: frame.name(),
-        url: frame.url(),
-        text: text
-      });
-    }
+    const buttons = await page.locator("button").evaluateAll((nodes) =>
+      nodes.map((node) => ({
+        text: (node.innerText || node.textContent || "").trim(),
+        ariaLabel: node.getAttribute("aria-label") || ""
+      }))
+    );
+
+    const inputs = await page.locator("input").evaluateAll((nodes) =>
+      nodes.map((node) => ({
+        type: node.type || "",
+        name: node.name || "",
+        placeholder: node.placeholder || ""
+      }))
+    );
 
     res.json({
       status: "success",
       pageTitle: title,
       pageUrl: page.url(),
-      frameCount: frames.length,
-      frames: frames,
-      frameTexts: frameTexts
+      bodyText: bodyText,
+      htmlPreview: html.slice(0, 20000),
+      scriptCount: scripts.length,
+      scripts: scripts,
+      linkCount: links.length,
+      links: links,
+      iframeCount: iframes.length,
+      iframes: iframes,
+      buttonCount: buttons.length,
+      buttons: buttons,
+      inputCount: inputs.length,
+      inputs: inputs
     });
 
   } catch (error) {
