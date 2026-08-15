@@ -18,7 +18,7 @@ app.get("/", (req, res) => {
 });
 
 // --------------------------------------------------
-// Test that Playwright can launch Chromium
+// Browser test
 // --------------------------------------------------
 app.get("/browser-test", async (req, res) => {
   let browser;
@@ -31,16 +31,14 @@ app.get("/browser-test", async (req, res) => {
     const page = await browser.newPage();
 
     await page.goto(BOOKING_URL, {
-      waitUntil: "domcontentloaded",
-      timeout: 30000
+      waitUntil: "networkidle",
+      timeout: 60000
     });
-
-    const title = await page.title();
 
     res.json({
       status: "success",
       browser: "chromium",
-      pageTitle: title,
+      pageTitle: await page.title(),
       url: page.url()
     });
 
@@ -58,9 +56,10 @@ app.get("/browser-test", async (req, res) => {
 });
 
 // --------------------------------------------------
-// Inspect booking page DOM, HTML and scripts
+// Step 1:
+// Open booking page and click "Book an appointment"
 // --------------------------------------------------
-app.get("/page-debug", async (req, res) => {
+app.get("/step1-test", async (req, res) => {
   let browser;
 
   try {
@@ -68,79 +67,64 @@ app.get("/page-debug", async (req, res) => {
       headless: true
     });
 
-    const page = await browser.newPage();
+    const page = await browser.newPage({
+      viewport: {
+        width: 1440,
+        height: 1000
+      }
+    });
 
     await page.goto(BOOKING_URL, {
       waitUntil: "networkidle",
       timeout: 60000
     });
 
-    await page.waitForTimeout(5000);
+    await page.waitForTimeout(3000);
 
-    const title = await page.title();
-    const html = await page.content();
+    const bookAppointment = page
+      .getByText("Book an appointment", {
+        exact: true
+      })
+      .first();
 
-    const bodyText = await page.locator("body").innerText().catch(() => "");
+    await bookAppointment.waitFor({
+      state: "visible",
+      timeout: 15000
+    });
 
-    const scripts = await page.locator("script").evaluateAll((nodes) =>
-      nodes.map((node) => ({
-        src: node.src || "",
-        type: node.type || "",
-        textPreview: node.src ? "" : (node.textContent || "").slice(0, 500)
-      }))
-    );
+    await bookAppointment.click();
 
-    const links = await page.locator("link").evaluateAll((nodes) =>
-      nodes.map((node) => ({
-        rel: node.rel || "",
-        href: node.href || ""
-      }))
-    );
+    await page.waitForTimeout(4000);
 
-    const iframes = await page.locator("iframe").evaluateAll((nodes) =>
-      nodes.map((node) => ({
-        src: node.src || "",
-        title: node.title || "",
-        name: node.name || ""
-      }))
-    );
+    const bodyText = await page
+      .locator("body")
+      .innerText()
+      .catch(() => "");
 
-    const buttons = await page.locator("button").evaluateAll((nodes) =>
-      nodes.map((node) => ({
-        text: (node.innerText || node.textContent || "").trim(),
-        ariaLabel: node.getAttribute("aria-label") || ""
-      }))
-    );
-
-    const inputs = await page.locator("input").evaluateAll((nodes) =>
-      nodes.map((node) => ({
-        type: node.type || "",
-        name: node.name || "",
-        placeholder: node.placeholder || ""
-      }))
-    );
+    const buttons = await page
+      .locator("button")
+      .evaluateAll((nodes) =>
+        nodes
+          .map((node) => ({
+            text: (node.innerText || node.textContent || "").trim(),
+            ariaLabel: node.getAttribute("aria-label") || ""
+          }))
+          .filter((item) => item.text || item.ariaLabel)
+      );
 
     res.json({
       status: "success",
-      pageTitle: title,
+      step: "book_appointment_clicked",
+      pageTitle: await page.title(),
       pageUrl: page.url(),
       bodyText: bodyText,
-      htmlPreview: html.slice(0, 20000),
-      scriptCount: scripts.length,
-      scripts: scripts,
-      linkCount: links.length,
-      links: links,
-      iframeCount: iframes.length,
-      iframes: iframes,
-      buttonCount: buttons.length,
-      buttons: buttons,
-      inputCount: inputs.length,
-      inputs: inputs
+      buttons: buttons
     });
 
   } catch (error) {
     res.status(500).json({
       status: "error",
+      step: "book_appointment",
       message: error.message
     });
 
