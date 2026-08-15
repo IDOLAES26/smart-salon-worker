@@ -34,7 +34,7 @@ app.get("/step2-test", async (req, res) => {
       }
     });
 
-    // 1. Open booking page
+    // 1. Open SmartSalon
     await page.goto(BOOKING_URL, {
       waitUntil: "networkidle",
       timeout: 60000
@@ -48,7 +48,7 @@ app.get("/step2-test", async (req, res) => {
 
     await page.waitForTimeout(2500);
 
-    // 2. Click Book an appointment
+    // 2. Book an appointment
     const bookAppointment = page
       .getByText("Book an appointment", {
         exact: true
@@ -68,7 +68,7 @@ app.get("/step2-test", async (req, res) => {
       result: "success"
     });
 
-    // 3. Wait for services screen
+    // 3. Wait for service screen
     await page
       .getByText("Select Services", {
         exact: true
@@ -103,7 +103,7 @@ app.get("/step2-test", async (req, res) => {
 
     await page.waitForTimeout(1500);
 
-    // 5. Locate requested service
+    // 5. Find service
     const serviceText = page
       .getByText(requestedService, {
         exact: true
@@ -124,14 +124,13 @@ app.get("/step2-test", async (req, res) => {
       result: "success"
     });
 
-    // 6. Find the service card
+    // 6. Find service card
     const serviceCard = serviceText
       .locator(
         "xpath=ancestor::div[contains(@class,'grid') and contains(@class,'grid-cols-9')][1]"
       );
 
-    // 7. Click SmartSalon's actual "+" control
-    // It is a DIV, not a button.
+    // 7. Click the actual + control
     const addControl = serviceCard
       .locator("div.aspect-square.cursor-pointer")
       .first();
@@ -150,21 +149,80 @@ app.get("/step2-test", async (req, res) => {
       result: "success"
     });
 
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(2000);
 
-    // 8. Find Continue
-    const continueButton = page
-      .getByText("Continue", {
-        exact: true
-      })
-      .last();
+    // 8. Wait for a VISIBLE + ENABLED Continue button
+    await page.waitForFunction(() => {
+      const buttons = Array.from(
+        document.querySelectorAll("button")
+      );
 
-    await continueButton.waitFor({
-      state: "visible",
-      timeout: 10000
+      return buttons.some((button) => {
+        const text =
+          (button.innerText || "").trim();
+
+        const rect =
+          button.getBoundingClientRect();
+
+        const visible =
+          rect.width > 0 &&
+          rect.height > 0 &&
+          window.getComputedStyle(button).visibility !== "hidden" &&
+          window.getComputedStyle(button).display !== "none";
+
+        return (
+          text === "Continue" &&
+          !button.disabled &&
+          visible
+        );
+      });
+    }, {
+      timeout: 15000
     });
 
-    await continueButton.click();
+    // 9. Click that exact visible Continue button
+    const continueClicked =
+      await page.evaluate(() => {
+        const buttons = Array.from(
+          document.querySelectorAll("button")
+        );
+
+        const button = buttons.find((button) => {
+          const text =
+            (button.innerText || "").trim();
+
+          const rect =
+            button.getBoundingClientRect();
+
+          const style =
+            window.getComputedStyle(button);
+
+          const visible =
+            rect.width > 0 &&
+            rect.height > 0 &&
+            style.visibility !== "hidden" &&
+            style.display !== "none";
+
+          return (
+            text === "Continue" &&
+            !button.disabled &&
+            visible
+          );
+        });
+
+        if (!button) {
+          return false;
+        }
+
+        button.click();
+        return true;
+      });
+
+    if (!continueClicked) {
+      throw new Error(
+        "Visible enabled Continue button was not found"
+      );
+    }
 
     actionLog.push({
       step: 6,
@@ -172,7 +230,7 @@ app.get("/step2-test", async (req, res) => {
       result: "success"
     });
 
-    // 9. Wait for technician screen
+    // 10. Wait for technician screen
     await page
       .getByText("Select Technician", {
         exact: true
@@ -184,16 +242,23 @@ app.get("/step2-test", async (req, res) => {
 
     await page.waitForTimeout(1500);
 
-    // 10. Read screen text
+    // 11. Read technician screen
     const bodyText = await page
       .locator("body")
       .innerText()
       .catch(() => "");
 
+    actionLog.push({
+      step: 7,
+      action: "technician_screen_loaded",
+      result: "success"
+    });
+
     res.json({
       status: "success",
       step: "technician_screen",
       requestedService,
+      pageUrl: page.url(),
       bodyText,
       actionLog
     });
