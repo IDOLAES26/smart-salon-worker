@@ -14,11 +14,14 @@ app.get("/", (req, res) => {
   });
 });
 
-app.get("/step2-test", async (req, res) => {
+app.get("/step3-test", async (req, res) => {
   let browser;
 
   const requestedService =
     req.query.service || "Full set: hybrid";
+
+  const requestedTechnician =
+    req.query.technician || "Noel";
 
   const actionLog = [];
 
@@ -48,7 +51,7 @@ app.get("/step2-test", async (req, res) => {
 
     await page.waitForTimeout(2500);
 
-    // 2. Book an appointment
+    // 2. Click Book an appointment
     const bookAppointment = page
       .getByText("Book an appointment", {
         exact: true
@@ -68,7 +71,7 @@ app.get("/step2-test", async (req, res) => {
       result: "success"
     });
 
-    // 3. Wait for service screen
+    // 3. Wait for services screen
     await page
       .getByText("Select Services", {
         exact: true
@@ -80,7 +83,7 @@ app.get("/step2-test", async (req, res) => {
 
     await page.waitForTimeout(1500);
 
-    // 4. Click Eyelash extension category
+    // 4. Select Eyelash extension category
     const eyelashCategory = page
       .getByText("Eyelash extension", {
         exact: true
@@ -103,7 +106,7 @@ app.get("/step2-test", async (req, res) => {
 
     await page.waitForTimeout(1500);
 
-    // 5. Find service
+    // 5. Find requested service
     const serviceText = page
       .getByText(requestedService, {
         exact: true
@@ -125,12 +128,11 @@ app.get("/step2-test", async (req, res) => {
     });
 
     // 6. Find service card
-    const serviceCard = serviceText
-      .locator(
-        "xpath=ancestor::div[contains(@class,'grid') and contains(@class,'grid-cols-9')][1]"
-      );
+    const serviceCard = serviceText.locator(
+      "xpath=ancestor::div[contains(@class,'grid') and contains(@class,'grid-cols-9')][1]"
+    );
 
-    // 7. Click the actual + control
+    // 7. Click actual SmartSalon add-service control
     const addControl = serviceCard
       .locator("div.aspect-square.cursor-pointer")
       .first();
@@ -151,7 +153,7 @@ app.get("/step2-test", async (req, res) => {
 
     await page.waitForTimeout(2000);
 
-    // 8. Wait for a VISIBLE + ENABLED Continue button
+    // 8. Find visible + enabled Continue button
     await page.waitForFunction(() => {
       const buttons = Array.from(
         document.querySelectorAll("button")
@@ -164,11 +166,14 @@ app.get("/step2-test", async (req, res) => {
         const rect =
           button.getBoundingClientRect();
 
+        const style =
+          window.getComputedStyle(button);
+
         const visible =
           rect.width > 0 &&
           rect.height > 0 &&
-          window.getComputedStyle(button).visibility !== "hidden" &&
-          window.getComputedStyle(button).display !== "none";
+          style.visibility !== "hidden" &&
+          style.display !== "none";
 
         return (
           text === "Continue" &&
@@ -180,8 +185,8 @@ app.get("/step2-test", async (req, res) => {
       timeout: 15000
     });
 
-    // 9. Click that exact visible Continue button
-    const continueClicked =
+    // 9. Click visible + enabled Continue
+    const continueToTechnicianClicked =
       await page.evaluate(() => {
         const buttons = Array.from(
           document.querySelectorAll("button")
@@ -218,9 +223,9 @@ app.get("/step2-test", async (req, res) => {
         return true;
       });
 
-    if (!continueClicked) {
+    if (!continueToTechnicianClicked) {
       throw new Error(
-        "Visible enabled Continue button was not found"
+        "Could not click Continue to technician screen"
       );
     }
 
@@ -242,22 +247,140 @@ app.get("/step2-test", async (req, res) => {
 
     await page.waitForTimeout(1500);
 
-    // 11. Read technician screen
+    // 11. Select Noel specifically
+    const technician = page
+      .getByText(requestedTechnician, {
+        exact: true
+      })
+      .first();
+
+    await technician.waitFor({
+      state: "visible",
+      timeout: 15000
+    });
+
+    await technician.click();
+
+    actionLog.push({
+      step: 7,
+      action: "select_technician",
+      target: requestedTechnician,
+      result: "success"
+    });
+
+    await page.waitForTimeout(1500);
+
+    // 12. Wait for next visible + enabled Continue button
+    await page.waitForFunction(() => {
+      const buttons = Array.from(
+        document.querySelectorAll("button")
+      );
+
+      return buttons.some((button) => {
+        const text =
+          (button.innerText || "").trim();
+
+        const rect =
+          button.getBoundingClientRect();
+
+        const style =
+          window.getComputedStyle(button);
+
+        const visible =
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.visibility !== "hidden" &&
+          style.display !== "none";
+
+        return (
+          text === "Continue" &&
+          !button.disabled &&
+          visible
+        );
+      });
+    }, {
+      timeout: 15000
+    });
+
+    // 13. Click Continue to Time
+    const continueToTimeClicked =
+      await page.evaluate(() => {
+        const buttons = Array.from(
+          document.querySelectorAll("button")
+        );
+
+        const button = buttons.find((button) => {
+          const text =
+            (button.innerText || "").trim();
+
+          const rect =
+            button.getBoundingClientRect();
+
+          const style =
+            window.getComputedStyle(button);
+
+          const visible =
+            rect.width > 0 &&
+            rect.height > 0 &&
+            style.visibility !== "hidden" &&
+            style.display !== "none";
+
+          return (
+            text === "Continue" &&
+            !button.disabled &&
+            visible
+          );
+        });
+
+        if (!button) {
+          return false;
+        }
+
+        button.click();
+        return true;
+      });
+
+    if (!continueToTimeClicked) {
+      throw new Error(
+        "Could not click Continue to time screen"
+      );
+    }
+
+    actionLog.push({
+      step: 8,
+      action: "continue_to_time",
+      result: "success"
+    });
+
+    // 14. Wait for Select Time
+    await page
+      .getByText("Select Time", {
+        exact: true
+      })
+      .waitFor({
+        state: "visible",
+        timeout: 15000
+      });
+
+    await page.waitForTimeout(2000);
+
+    // 15. Read time screen
     const bodyText = await page
       .locator("body")
       .innerText()
       .catch(() => "");
 
     actionLog.push({
-      step: 7,
-      action: "technician_screen_loaded",
+      step: 9,
+      action: "time_screen_loaded",
       result: "success"
     });
 
     res.json({
       status: "success",
-      step: "technician_screen",
+      step: "time_screen",
       requestedService,
+      requestedTechnician,
       pageUrl: page.url(),
       bodyText,
       actionLog
@@ -273,6 +396,7 @@ app.get("/step2-test", async (req, res) => {
     res.status(500).json({
       status: "error",
       requestedService,
+      requestedTechnician,
       message: error.message,
       actionLog
     });
