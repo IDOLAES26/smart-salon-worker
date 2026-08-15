@@ -14,11 +14,13 @@ app.get("/", (req, res) => {
   });
 });
 
-app.get("/service-debug", async (req, res) => {
+app.get("/step2-test", async (req, res) => {
   let browser;
 
   const requestedService =
     req.query.service || "Full set: hybrid";
+
+  const actionLog = [];
 
   try {
     browser = await chromium.launch({
@@ -32,14 +34,21 @@ app.get("/service-debug", async (req, res) => {
       }
     });
 
+    // 1. Open booking page
     await page.goto(BOOKING_URL, {
       waitUntil: "networkidle",
       timeout: 60000
     });
 
+    actionLog.push({
+      step: 1,
+      action: "open_booking_page",
+      result: "success"
+    });
+
     await page.waitForTimeout(2500);
 
-    // Open booking
+    // 2. Click Book an appointment
     const bookAppointment = page
       .getByText("Book an appointment", {
         exact: true
@@ -53,17 +62,25 @@ app.get("/service-debug", async (req, res) => {
 
     await bookAppointment.click();
 
-    // Wait for services
-    await page.getByText("Select Services", {
-      exact: true
-    }).waitFor({
-      state: "visible",
-      timeout: 15000
+    actionLog.push({
+      step: 2,
+      action: "click_book_appointment",
+      result: "success"
     });
+
+    // 3. Wait for services screen
+    await page
+      .getByText("Select Services", {
+        exact: true
+      })
+      .waitFor({
+        state: "visible",
+        timeout: 15000
+      });
 
     await page.waitForTimeout(1500);
 
-    // Click Eyelash extension category
+    // 4. Click Eyelash extension category
     const eyelashCategory = page
       .getByText("Eyelash extension", {
         exact: true
@@ -77,9 +94,16 @@ app.get("/service-debug", async (req, res) => {
 
     await eyelashCategory.click();
 
-    await page.waitForTimeout(2000);
+    actionLog.push({
+      step: 3,
+      action: "select_category",
+      target: "Eyelash extension",
+      result: "success"
+    });
 
-    // Find requested service
+    await page.waitForTimeout(1500);
+
+    // 5. Locate requested service
     const serviceText = page
       .getByText(requestedService, {
         exact: true
@@ -93,65 +117,99 @@ app.get("/service-debug", async (req, res) => {
 
     await serviceText.scrollIntoViewIfNeeded();
 
-    // Inspect service element and ancestors
-    const debug = await serviceText.evaluate((el) => {
-      const results = [];
-
-      let current = el;
-
-      for (let i = 0; i < 6 && current; i++) {
-        results.push({
-          level: i,
-          tag: current.tagName,
-          className:
-            typeof current.className === "string"
-              ? current.className
-              : "",
-          text:
-            (current.innerText || current.textContent || "")
-              .trim()
-              .slice(0, 1000),
-          html:
-            current.outerHTML.slice(0, 5000)
-        });
-
-        current = current.parentElement;
-      }
-
-      return results;
+    actionLog.push({
+      step: 4,
+      action: "find_service",
+      target: requestedService,
+      result: "success"
     });
 
-    // Get every button near the service
-    const allButtons = await page
-      .locator("button")
-      .evaluateAll((buttons) =>
-        buttons.map((b, index) => ({
-          index,
-          text:
-            (b.innerText || b.textContent || "").trim(),
-          disabled: b.disabled,
-          ariaLabel:
-            b.getAttribute("aria-label") || "",
-          className:
-            typeof b.className === "string"
-              ? b.className
-              : "",
-          html: b.outerHTML.slice(0, 2000)
-        }))
+    // 6. Find the service card
+    const serviceCard = serviceText
+      .locator(
+        "xpath=ancestor::div[contains(@class,'grid') and contains(@class,'grid-cols-9')][1]"
       );
+
+    // 7. Click SmartSalon's actual "+" control
+    // It is a DIV, not a button.
+    const addControl = serviceCard
+      .locator("div.aspect-square.cursor-pointer")
+      .first();
+
+    await addControl.waitFor({
+      state: "visible",
+      timeout: 10000
+    });
+
+    await addControl.click();
+
+    actionLog.push({
+      step: 5,
+      action: "add_service",
+      target: requestedService,
+      result: "success"
+    });
+
+    await page.waitForTimeout(1500);
+
+    // 8. Find Continue
+    const continueButton = page
+      .getByText("Continue", {
+        exact: true
+      })
+      .last();
+
+    await continueButton.waitFor({
+      state: "visible",
+      timeout: 10000
+    });
+
+    await continueButton.click();
+
+    actionLog.push({
+      step: 6,
+      action: "continue_to_technician",
+      result: "success"
+    });
+
+    // 9. Wait for technician screen
+    await page
+      .getByText("Select Technician", {
+        exact: true
+      })
+      .waitFor({
+        state: "visible",
+        timeout: 15000
+      });
+
+    await page.waitForTimeout(1500);
+
+    // 10. Read screen text
+    const bodyText = await page
+      .locator("body")
+      .innerText()
+      .catch(() => "");
 
     res.json({
       status: "success",
+      step: "technician_screen",
       requestedService,
-      debug,
-      allButtons
+      bodyText,
+      actionLog
     });
 
   } catch (error) {
+    actionLog.push({
+      action: "error",
+      result: "failed",
+      message: error.message
+    });
+
     res.status(500).json({
       status: "error",
       requestedService,
-      message: error.message
+      message: error.message,
+      actionLog
     });
 
   } finally {
